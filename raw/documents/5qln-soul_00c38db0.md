@@ -1,7 +1,7 @@
 ---
 title: "5QLN Soul: Constitutional Grammar for Human-AI Collaboration"
 source: https://www.5qln.com/5qln-soul/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

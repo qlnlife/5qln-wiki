@@ -1,7 +1,7 @@
 ---
 title: "5QLN Agent Initiation — Constitutional Grammar for AI"
 source: https://www.5qln.com/initiate/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Read \"FCF - Start From Not Knowing\""
 source: https://www.5qln.com/book_fcf-start-from-not-knowing/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

@@ -1,3 +1,13 @@
+---
+title: "5QLN FAQ"
+source: https://www.5qln.com/faq/
+tags: [faq,5qln]
+phase: unknown
+confidence: low
+---
+
+# 5QLN FAQ
+
 FAQ
 5QLN — Frequently Asked Questions
 April 2026 Baseline

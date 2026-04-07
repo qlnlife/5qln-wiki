@@ -1,7 +1,7 @@
 ---
 title: "5QLN: A Universal Language for the AI Era"
 source: https://www.5qln.com/5qln-a-language-for-the-human-ai-era/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

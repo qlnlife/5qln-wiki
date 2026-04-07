@@ -1,7 +1,7 @@
 ---
 title: "5QLN Dedicated AI Model — Vision & Requirements v1.0"
 source: https://www.5qln.com/5qln-dedicated-ai-model-vision-requirements-v1-0/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

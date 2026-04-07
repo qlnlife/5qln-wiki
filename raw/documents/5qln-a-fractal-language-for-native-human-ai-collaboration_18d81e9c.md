@@ -1,7 +1,7 @@
 ---
 title: "5QLN: A Fractal Language for Native Human-AI Training"
 source: https://www.5qln.com/5qln-a-fractal-language-for-native-human-ai-collaboration/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

@@ -1,7 +1,7 @@
 ---
 title: "5QLN Memory Codex: Essence Storage, Not Data"
 source: https://www.5qln.com/14-5qln-memory-codex/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

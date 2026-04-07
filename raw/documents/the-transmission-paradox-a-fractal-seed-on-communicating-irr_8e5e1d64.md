@@ -1,7 +1,7 @@
 ---
 title: "THE TRANSMISSION PARADOX: A Fractal Seed on Communicating Irreducible Experience"
 source: https://www.5qln.com/the-transmission-paradox-a-fractal-seed-on-communicating-irreducible-experience/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

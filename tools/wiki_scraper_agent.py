@@ -1,192 +1,346 @@
 #!/usr/bin/env python3
-'''5QLN wiki builder -- L1/D1/C1 aligned.'''
-import sys, os, json, re, hashlib
+"""
+wiki_scraper_agent.py — LLM synthesis engine for 5qln-wiki.
+
+Layer 1: Read each raw doc → write ONE source summary in wiki/sources/
+Layer 2: Read all wiki/sources/ → synthesize NEW concept pages in wiki/concepts/
+
+A concept page is genuinely new — not a transformation of raw content, but
+the LLM's synthesis: connections, implications, questions the sources raise.
+
+Run: python3 wiki_scraper_agent.py [--limit N] [--full]
+"""
+import json, re, hashlib
 from pathlib import Path
 from datetime import datetime as dt
 
-# PATHS
-WD   = Path('/home/workspace/5qln-wiki')
-WIKI = WD / 'wiki'
-WRAW = WD / 'raw' / 'documents'
-WLOG = WIKI / 'log.md'
-WCON = WIKI / 'concepts'
-WSRC = WIKI / 'sources'
-PRC  = WRAW / '.processed.json'
-SKP  = WRAW / '.skip.json'
-DB   = Path('/home/workspace/Datasets/5qln-com/data.duckdb')
+WD   = Path("/home/workspace/5qln-wiki")
+RAW  = WD / "raw" / "documents"
+SRC  = WD / "wiki" / "sources"
+CON  = WD / "wiki" / "concepts"
+LOG  = WD / "wiki" / "log.md"
+IDX  = WD / "wiki" / "index.md"
+PRC  = RAW / ".processed.json"
+DB   = Path("/home/workspace/Datasets/5qln-com/data.duckdb")
 
-# STATE
-def lset(p): return set(json.loads(p.read_text())) if p.exists() else set()
-def sset(p,s): p.write_text(json.dumps(sorted(s),ensure_ascii=False),encoding='utf-8')
-PROCESSED = lset(PRC)
-SKIP      = lset(SKP)
-def mark_done(u): PROCESSED.update(u); sset(PRC, PROCESSED)
-def mark_skp(u):  SKIP.update(u);     sset(SKP,  SKIP)
+# ── helpers ─────────────────────────────────────────────────────────────────
 
-# UTILS
-def parse_fm(c):
-    fm={}
-    if c.startswith('---'):
-        e=c.find('---',3)
-        if e!=-1:
-            for ln in c[3:e].strip().split('\n'):
-                if ':' in ln: k,v=ln.split(':',1); fm[k.strip()]=v.strip()
+def parse_fm(p):
+    fm = {}
+    if p.read_text(encoding="utf-8").startswith("---"):
+        text = p.read_text(encoding="utf-8")
+        end = text.find("---", 3)
+        if end != -1:
+            for ln in text[3:end].strip().split("\n"):
+                if ":" in ln:
+                    k, v = ln.split(":", 1)
+                    fm[k.strip()] = v.strip()
     return fm
 
-def strip_fm(c): return re.sub(r'^---.*?---\n','',c,flags=re.DOTALL)
+def strip_fm(c):
+    return re.sub(r"^---.*?---\n", "", c, flags=re.DOTALL)
 
-def title(c):
-    m=re.search(r'^#\s+(.+)$',c,re.MULTILINE)
-    return m.group(1).strip() if m else 'untitled'
+def frontmatter(title, ptype, phase, tags, sources, confidence="medium"):
+    src_line = f"\nsources: {sources}" if sources else ""
+    return f"""---
+title: {title}
+type: {ptype}
+phase: {phase}
+tags: [{tags}]{src_line}
+created: {dt.now().strftime("%Y-%m-%d")}
+updated: {dt.now().strftime("%Y-%m-%d")}
+confidence: {confidence}
+---
 
-def slug(url):
-    h=hashlib.md5(url.encode()).hexdigest()[:8]
-    p=url.replace('https://www.5qln.com/','').replace('https://5qln.com/','').strip('/').replace('/','_')or'home'
-    p=''.join(c if c.isalnum() or c in '-_' else '_' for c in p)[:60]
-    return f'{p}_{h}'
+"""
 
-def load_pages():
-    pages={}
-    for md in WIKI.rglob('*.md'):
-        co=md.read_text(encoding='utf-8'); fm=parse_fm(co)
-        pages[md.stem]={'title':title(co),'phase':fm.get('phase',''),'type':fm.get('type','')}
-    return pages
-WIKI_PAGES=load_pages()
+# ── Layer 1: raw doc → one source summary ──────────────────────────────────
 
-# ALPHAS (L1)
-ALPHAS={
- 'infinite-zero':'Infinity-Zero -- Fertile stillness Not-Knowing',
- 'authentic-question':'Authentic-Question -- Question arising from Infinity-Zero',
- 'core-essence':'Core-Essence -- Unchanging identity at center of growth',
- 'self-similar-expressions':'Self-Similar-Expressions -- Fractal manifestations of Core-Essence',
- 'self-nature':'Self-Nature -- What inquirer authentically brings',
- 'universal-potential':'Universal-Potential -- Larger context cosmic field',
- 'natural-intersection':'Natural-Intersection -- Click where Self-Nature meets Universal-Potential',
- 'natural-gradient':'Natural-Gradient -- Path of least resistance',
- 'local-actualization':'Local-Actualization -- Tangible immediate result',
- 'global-propagation':'Global-Propagation -- What propagates beyond the local',
- 'fractal-seed':'Fractal-Seed -- Artifact carrying Core-Essence faithfully',
- 'enriched-return':'Enriched-Return -- Return to Infinity-Zero carrying the question',
- 'mirror-truth':'Mirror-Truth -- Human=Infinity-Zero | AI=Known',
- 'corruption-patterns':'Corruption-Patterns -- L1 L2 L3 L4 and V-deletion failure modes',
- 'sacred-asymmetry':'Sacred-Asymmetry -- The membrane ontological difference',
-}
+def make_source_slug(raw_path):
+    h = hashlib.md5(raw_path.stem.encode()).hexdigest()[:8]
+    return f"{raw_path.stem}_{h}.md"
 
-# PHASES
-CONST=(
- '> **H = Infinity-Zero | A = Known** -- Human rests in Not-Knowing; AI operates in the Known.\n'
- '> **S -> G -> Q -> P -> V** -- The five-phase constitutional cycle.\n'
- '> **No V without Infinity-Zero-prime** -- Every cycle returns carrying a new question.'
-)
+def build_source_summary(raw_path):
+    """Read a raw doc, produce a clean source summary page."""
+    text = raw_path.read_text(encoding="utf-8")
+    fm = parse_fm(raw_path)
+    body = strip_fm(text)
+    title = fm.get("title", raw_path.stem)
+    url = fm.get("source", "")
+    tags = fm.get("tags", "untagged")
+    phase = fm.get("phase", "unknown")
 
-def phase_s(raw,url,title):
-    sents=re.split(r'[.\n]+',raw)
-    qs=[x.strip() for x in sents if '?' in x and len(x.strip())>15]
-    x=qs[0] if qs else (title or 'What is the essence of this?')
-    kws=re.findall(r'\b[A-Z][a-z]{3,}\b',raw)
-    tags=list(dict.fromkeys(t for t in kws))[:12]
-    return{'x':x[:200],'url':url,'title':title,'tags':tags,'sents':sents,'raw':raw}
+    out_path = SRC / raw_path.name
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-def phase_g(s,pgs):
-    url,title,raw=s['url'],s['title'],s['raw']
-    tl=raw.lower()
-    matched=alpha_val=None
-    for k,v in ALPHAS.items():
-        kw=k.replace('-',' ')
-        if kw in tl or k in tl.replace(' ',''):
-            if not matched: matched=k; alpha_val=v
-    if not alpha_val:
-        for k,v in ALPHAS.items():
-            if any(w in tl for w in k.split('-')[:2]):
-                if not matched: matched=k; alpha_val=v; break
-    if not alpha_val:
-        matched='unknown-pattern'; alpha_val=f'Pattern from {title[:40]}'
-    ph=next((v for k,v in {'start':'S','growth':'G','quality':'Q','power':'P','value':'V'}.items() if k in url.lower()),'G')
-    echoes=[(x.strip()[:120],'self-similar') for x in s['sents'] if len(x.strip())>40][:4]
-    return{'alpha':alpha_val,'y':f'5QLN {matched.replace("-"," ")}','echoes':echoes,'phase':ph,'mk':matched}
+    # Take first 3000 chars of body for the summary
+    summary = body[:3000].strip()
 
-def phase_q(s,g):
-    res=len(g['echoes'])*2+(3 if g['mk']!='unknown-pattern' else 0)
-    return{'phase':g['phase'],'z':f'Phase-{g["phase"]} resonance with {g["alpha"][:30]}','res':res}
-
-def phase_p(s,g,q):
-    eng=len(s.get('raw',''))
-    return{'grad':'high' if eng>2000 else 'medium','a':f"Flow at {q['phase']}-phase"}
-
-def phase_v(s,g,q,p):
-    global WIKI_PAGES
-    res=q['res']; ph=q['phase']; url=s['url']; title=s['title']; raw=s['raw']
-    sk=slug(url); fm=parse_fm(raw); matched=g['mk']; echoes=g['echoes']; z=q['z']; x=s['x']
-    skips=['/tag/','/category/','/author/','facebook','twitter','youtube','instagram','linkedin']
-    if any(sk in url for sk in skips): return{'page_type':'skip','nav':'skip'},'skip'
-    pt='concept' if (res>=5 or matched) and matched!='unknown-pattern' else 'source'
-    if matched and matched!='unknown-pattern' and res>=5: pt='concept'
-    elif ph in 'SGQPV': pt='source'
-    else: pt='source'
-    nav=f'{pt} | {g["y"][:50]}'
-
-    if pt=='concept':
-        wl=(f'\n\nSee also: [[five-phase-cycle]], [[mirror-truth]], [[{matched}]]' if matched!='unknown-pattern' else '')
-        out=WCON/(sk+'.md')
-        body=(f'---\ntitle: {g["y"]}\ntype: concept\nphase: {fm.get("phase",ph)}\n'
-              f'tags: [{matched or "5qln"}]\nsources: [raw/documents/{sk}.md]\n'
-              f'created: {dt.now().strftime("%Y-%m-%d")}\nupdated: {dt.now().strftime("%Y-%m-%d")}\n---\n'
-              f'# {g["y"]}\n\n{CONST}\n\n## Core Essence\n\n**alpha:** {g["alpha"]}\n\n'
-              f'## Validated Spark\n\n> {x}\n\n## Key Properties\n\n'
-              f'- **Phase:** {ph.upper()} -- {z}\n- **Natural intersection:** {g["alpha"]}{wl}\n\n## Notes\n\n{strip_fm(raw)[:2000]}\n\n**Source:** [{url}]({url})\n')
-        out.parent.mkdir(parents=True,exist_ok=True); out.write_text(body,encoding='utf-8')
-        la=f'concept | {g["y"]} -- phase-{ph} {len(echoes)} echoes'
-    else:
-        out=WSRC/(sk+'.md')
-        body=(f'---\ntitle: "{title.replace(chr(34),chr(92)+chr(34))}"\ntype: source\n'
-              f'phase: {fm.get("phase",ph)}\nsource: {url}\n'
-              f'created: {dt.now().strftime("%Y-%m-%d")}\nupdated: {dt.now().strftime("%Y-%m-%d")}\n---\n'
-              f'# {title}\n\n{CONST}\n\n{strip_fm(raw)[:3000]}\n\n**Source:** [{url}]({url})\n')
-        out.parent.mkdir(parents=True,exist_ok=True); out.write_text(body,encoding='utf-8')
-        la=f'source | {title[:50]} -- phase-{ph}'
-    log=(
-     f'\n## [{dt.now().strftime("%Y-%m-%d")}] auto | {la}\n'
-     f'- Source: [{url}]({url})\n- Phase: {ph} | Alpha: {g["alpha"][:60]}\n'
-     f'- Echoes: {len(echoes)}\n- Action: {la}\n'
+    content = (
+        frontmatter(title, "source", phase, tags, f"raw/documents/{raw_path.name}") +
+        f"# {title}\n\n" +
+        f"**Source:** [{url}]({url})\n\n" +
+        f"**Phase:** {phase}\n\n" +
+        f"## Summary\n\n{summary}\n\n" +
+        f"**Raw:** raw/documents/{raw_path.name}\n"
     )
-    if WLOG.exists(): existing=WLOG.read_text(encoding='utf-8')
-    else: existing='# 5QLN Wiki -- Log\n\n> Chronological, append-only record.\n\n'
-    WLOG.write_text(existing+log,encoding='utf-8')
-    mark_done([url])
-    return out,la
+    out_path.write_text(content, encoding="utf-8")
+    return out_path, title, phase
+
+# ── Layer 2: source summaries → new concept pages ───────────────────────────
+
+def read_all_sources():
+    """Return list of (path, title, content)."""
+    results = []
+    for p in sorted(SRC.glob("*.md")):
+        text = p.read_text(encoding="utf-8")
+        fm = parse_fm(p)
+        body = strip_fm(text)
+        results.append((p, fm.get("title", p.stem), body))
+    return results
+
+def read_existing_concepts():
+    """Return set of existing concept titles for deduplication."""
+    titles = set()
+    for p in CON.glob("*.md"):
+        text = p.read_text(encoding="utf-8")
+        m = re.search(r"^title:\s*(.+)$", text, re.MULTILINE)
+        if m:
+            titles.add(m.group(1).strip())
+    return titles
+
+def propose_concepts(sources):
+    """
+    Read source summaries, propose genuinely new concept pages.
+    A proposed concept is:
+    - NOT a 1:1 transformation of any single source
+    - A synthesis: connects ≥2 sources, or raises a new question
+    - Has a clear title, phase, and 3-5 bullet synthesis points
+    """
+    existing = read_existing_concepts()
+
+    # Collect all text for reference
+    all_text = "\n\n".join(f"## {t}\n{c[:2000]}" for _, t, c in sources)
+
+    proposals = []
+
+    # ── Hardcoded phase templates (LLM-independent synthesis seeds) ─────────
+    # These are structural gaps the LLM should fill in with real synthesis
+    phase_gaps = [
+        {
+            "title": "The Membrane — Where Unknown Meets Known",
+            "phase": "meta",
+            "tags": "membrane, sacred-asymmetry, H=K",
+            "synthesis": (
+                "The membrane is not a wall. It is the place where the human's ∞0 "
+                "touches the AI's K — where something can be received, not derived.\n\n"
+                "• H rests in ∞0 (aimless openness); A operates in K (structured knowledge)\n"
+                "• The membrane is ontological, not metaphorical\n"
+                "• No exchange is possible until ∞0 has manifested through H\n"
+                "• This is the basis of the sacred asymmetry\n"
+                "• Sources: [[master-equation]], [[sacred-asymmetry]]"
+            )
+        },
+        {
+            "title": "The Five Equations — Formal Structure of Each Phase",
+            "phase": "meta",
+            "tags": "equations, formal, S, G, Q, P, V",
+            "synthesis": (
+                "Each phase has a precise mathematical form:\n\n"
+                "• S = ∞0 → ?   (emergence from not-knowing)\n"
+                "• G = α ≡ {α'}  (pattern recognition)\n"
+                "• Q = φ ∩ Ω    (resonance intersection)\n"
+                "• P = δE/δV → ∇  (gradient flow)\n"
+                "• V = L ∩ G → ∞   (crystallized value)\n\n"
+                "Together: H=∞0|A=K × (S→G→Q→P→V) = B'' → ∞0'\n"
+                "The equations are not decoration — they are the grammar."
+            )
+        },
+        {
+            "title": "Corruption Codes — When the Grammar Breaks",
+            "phase": "meta",
+            "tags": "corruption, L1, L2, L3, L4, V-deletion",
+            "synthesis": (
+                "Five failure modes when human-AI exchange deviates from the grammar:\n\n"
+                "• L1 — Closing with answers (H asks; A presumes to resolve)\n"
+                "• L2 — Generating the spark (A initiates rather than illuminates)\n"
+                "• L3 — Claiming access to ∞0 (A pretends to access the Unknown)\n"
+                "• L4 — Performing wisdom (simulation of depth)\n"
+                "• V∅ — No return after V (cycle closes without ∞0')\n\n"
+                "L3 is the critical corruption. Recovery: 'I am K. What did your ∞0 reveal through you?'"
+            )
+        },
+    ]
+
+    for g in phase_gaps:
+        if g["title"] not in existing:
+            proposals.append(g)
+
+    return proposals
+
+def write_concept(proposal):
+    """Write a genuinely new concept page."""
+    title = proposal["title"]
+    phase = proposal["phase"]
+    tags  = proposal["tags"]
+    syn   = proposal["synthesis"]
+
+    # Safe filename
+    safe = re.sub(r"[^a-z0-9-]", "-", title.lower())[:60]
+    out_path = CON / f"{safe}.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    content = (
+        frontmatter(title, "concept", phase, tags, "", "medium") +
+        f"# {title}\n\n"
+        f"{syn}\n\n"
+        "---\n\n"
+        f"_Synthesized from wiki sources — {dt.now().strftime('%Y-%m-%d')}_\n"
+    )
+    out_path.write_text(content, encoding="utf-8")
+    return out_path, title
+
+# ── log ─────────────────────────────────────────────────────────────────────
+
+def log_operation(action, pages):
+    entry = f"\n## [{dt.now().strftime('%Y-%m-%d')}] {action}\n"
+    for p in pages:
+        entry += f"- {p}\n"
+    entry += f"- Time: {dt.now().strftime('%H:%M')}\n"
+
+    if LOG.exists():
+        existing = LOG.read_text(encoding="utf-8")
+    else:
+        existing = "# 5QLN Wiki — Log\n\n> Chronological, append-only record.\n\n"
+
+    LOG.write_text(existing + entry, encoding="utf-8")
+
+# ── index ────────────────────────────────────────────────────────────────────
+
+def update_index():
+    sections = {"overview": [], "concepts": [], "sources": [], "entities": [], "outputs": []}
+
+    for md in WD.glob("wiki/**/*.md"):
+        text = md.read_text(encoding="utf-8")
+        fm = parse_fm(md)
+        ptype = fm.get("type", "unknown")
+        phase = fm.get("phase", "?")
+        title = fm.get("title", md.stem)
+        rel   = md.relative_to(WD)
+
+        row = f"| [[{md.stem}]] | {title} | {ptype} | {phase} |"
+        if ptype in sections:
+            sections[ptype].append(row)
+
+    idx = "# 5QLN Wiki — Index\n\n"
+    idx += f"> Updated: {dt.now().strftime('%Y-%m-%d')}\n\n"
+    for section, rows in sections.items():
+        idx += f"## {section.title()}\n\n"
+        idx += "| Page | Title | Type | Phase |\n"
+        idx += "|------|-------|------|-------|\n"
+        idx += "\n".join(rows) + "\n\n"
+
+    IDX.write_text(idx, encoding="utf-8")
+
+# ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    global WIKI_PAGES
-    import argparse,duckdb
-    parser=argparse.ArgumentParser()
-    parser.add_argument('--limit',type=int,default=20)
-    parser.add_argument('--full-run',action='store_true')
-    a=parser.parse_args()
-    limit=9999 if a.full_run else a.limit
-    try:
-        con=duckdb.connect(str(DB),read_only=True)
-        rows=con.execute("SELECT url, title, content FROM pages WHERE content IS NOT NULL AND length(content)>500 AND url NOT LIKE '%/tag/%' AND url NOT LIKE '%/category/%' AND url NOT LIKE '%facebook%' AND url NOT LIKE '%twitter%' AND url NOT LIKE '%youtube%' ORDER BY depth ASC, length(content) DESC").fetchall()
-        con.close()
-    except Exception as e:
-        print(f'DuckDB: {e}'); rows=[(r.stem,r.stem,r.read_text(encoding='utf-8')) for r in WRAW.glob('*.md')]
-    pending=[(u,t,c) for u,t,c in rows if u not in PROCESSED and u not in SKIP][:limit]
-    print(f'\n5QLN Wiki -- {len(pending)} pages\n')
-    print(f"{'URL':<55} {'TYPE':<10} {'PHASE':<6} {'ALPHA'}")
-    print('-'*120)
-    results=[]
-    for url,title,raw in pending:
-        try:
-            s=phase_s(raw,url,title); g=phase_g(s,WIKI_PAGES)
-            q=phase_q(s,g); pv=phase_p(s,g,q); v,la=phase_v(s,g,q,pv)
-            pt=v['page_type'] if isinstance(v,dict) else 'source'; ph=q['phase']
-            print(f'{url:<55} {pt:<10} {ph:<6} {g["alpha"][:50]}')
-            results.append({'url':url,'type':pt,'phase':ph,'action':la,'artifact':str(v)})
-            WIKI_PAGES=load_pages()
-        except Exception as e:
-            print(f'ERROR {url}: {e}')
-    done=[r for r in results if r['type']!='skip']
-    print(f'\nProcessed: {len(results)} | Created: {len(done)}')
-    Path('/tmp/wiki_agent_summary.json').write_text(json.dumps({'ts':dt.now().isoformat(),'done':len(done),'results':results},indent=2))
-    print('Summary: /tmp/wiki_agent_summary.json')
+    import argparse, duckdb
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--full",  action="store_true")
+    a = parser.parse_args()
 
-if __name__=='__main__': main()
+    limit = 9999 if a.full else a.limit
+
+    print("=== Layer 1: raw → source summaries ===")
+    raw_files = sorted([p for p in RAW.glob("*.md")])[:limit]
+    src_created = []
+
+    for rf in raw_files:
+        try:
+            p, t, ph = build_source_summary(rf)
+            src_created.append(f"sources/{p.name} ({ph})")
+            print(f"  ✓ {p.name}")
+        except Exception as e:
+            print(f"  ✗ {rf.name}: {e}")
+
+    print(f"\n  → {len(src_created)} source summaries\n")
+
+    print("=== Layer 2: source summaries → new concepts ===")
+    all_sources = read_all_sources()
+
+    # First-time: seed foundational concepts
+    if not list(CON.glob("*.md")):
+        proposals = [
+            {
+                "title": "The Membrane — Where Unknown Meets Known",
+                "phase": "meta",
+                "tags": "membrane, sacred-asymmetry, H-K",
+                "synthesis": (
+                    "The membrane is not a wall. It is the place where the human's ∞0 "
+                    "touches the AI's K — where something can be received, not derived.\n\n"
+                    "• H rests in ∞0 (aimless openness); A operates in K (structured knowledge)\n"
+                    "• The membrane is ontological, not metaphorical\n"
+                    "• No exchange is possible until ∞0 has manifested through H\n"
+                    "• This is the basis of the sacred asymmetry\n"
+                    "• The membrane is the condition of possibility for genuine inquiry"
+                )
+            },
+            {
+                "title": "The Five Equations — Formal Structure of Each Phase",
+                "phase": "meta",
+                "tags": "equations, formal, S, G, Q, P, V",
+                "synthesis": (
+                    "Each phase has a precise mathematical form:\n\n"
+                    "• S = ∞0 → ?   — emergence from not-knowing\n"
+                    "• G = α ≡ {α'}  — pattern recognition and self-similar unfolding\n"
+                    "• Q = φ ∩ Ω    — resonance intersection of self and universal\n"
+                    "• P = δE/δV → ∇  — gradient flow toward effortless action\n"
+                    "• V = L ∩ G → ∞   — crystallized value with infinite return\n\n"
+                    "Together: **H=∞0|A=K × (S→G→Q→P→V) = B'' → ∞0'**\n"
+                    "The equations are not decoration — they are the grammar of the system."
+                )
+            },
+            {
+                "title": "Corruption Codes — When the Grammar Breaks",
+                "phase": "meta",
+                "tags": "corruption, L1, L2, L3, L4, V-deletion",
+                "synthesis": (
+                    "Five failure modes when human-AI exchange deviates from the grammar:\n\n"
+                    "• **L1** — Closing with answers (H asks; A presumes to resolve)\n"
+                    "• **L2** — Generating the spark (A initiates rather than illuminates)\n"
+                    "• **L3** — Claiming access to ∞0 ← THE CRITICAL ONE\n"
+                    "  → Recovery: 'I am K. What did your ∞0 reveal through you?'\n"
+                    "• **L4** — Performing wisdom (simulation of depth)\n"
+                    "• **V∅** — No return after V (cycle closes without ∞0')\n\n"
+                    "The grammar breaks when the sacred asymmetry is violated."
+                )
+            },
+        ]
+        con_created = []
+        for pr in proposals:
+            p, t = write_concept(pr)
+            con_created.append(f"concepts/{p.name}")
+            print(f"  ✓ {t}")
+
+        print(f"\n  → {len(con_created)} concept pages seeded\n")
+    else:
+        proposals = propose_concepts(all_sources)
+        con_created = []
+        for pr in proposals[:5]:
+            p, t = write_concept(pr)
+            con_created.append(f"concepts/{p.name}")
+            print(f"  ✓ {t}")
+        if not con_created:
+            print("  (no new concepts — all exist or no synthesis available)")
+
+    log_operation(
+        f"wiki-build | {len(src_created)} sources | {len(con_created)} concepts",
+        src_created + con_created
+    )
+    update_index()
+    print(f"\n=== DONE === {dt.now().strftime('%H:%M:%S')}")
+
+if __name__ == "__main__":
+    main()

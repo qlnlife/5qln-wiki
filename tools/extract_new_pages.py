@@ -1,104 +1,74 @@
 #!/usr/bin/env python3
 """
-extract_new_pages.py — Reads unprocessed pages from DuckDB,
-extracts them as raw source documents, and marks them processed.
+extract_new_pages.py — Pull unprocessed pages from DuckDB, write as raw source docs.
 Run: python3 extract_new_pages.py [--limit N]
 """
-import sys
-import os
-import json
-import hashlib
-import duckdb
+import json, hashlib, duckdb
 from pathlib import Path
 
 DB = "/home/workspace/Datasets/5qln-com/data.duckdb"
-WIKI_RAW = Path("/home/workspace/5qln-wiki/raw")
-WIKI_RAW_DOCS = WIKI_RAW / "documents"
-PROCESSED_MARKER = WIKI_RAW / ".processed_urls.json"
+RAW = Path("/home/workspace/5qln-wiki/raw/documents")
+MARKER = RAW / ".processed.json"
+
+SKIP_PREFIXES = ["/tag/", "/category/", "/author/", "/ghost/", "/Facebook", "/Twitter", "/LinkedIn"]
 
 def load_processed():
-    if PROCESSED_MARKER.exists():
-        return set(json.loads(PROCESSED_MARKER.read_text()))
-    return set()
+    return set(json.loads(MARKER.read_text())) if MARKER.exists() else set()
 
-def save_processed(processed_set):
-    PROCESSED_MARKER.parent.mkdir(parents=True, exist_ok=True)
-    PROCESSED_MARKER.write_text(json.dumps(sorted(processed_set), ensure_ascii=False))
+def save_processed(s):
+    MARKER.write_text(json.dumps(sorted(s), ensure_ascii=False))
 
-def url_to_slug(url):
-    """Convert URL to a safe filename slug."""
+def slug(url):
     h = hashlib.md5(url.encode()).hexdigest()[:8]
-    path = url.replace("https://www.5qln.com/", "").replace("https://5qln.com/", "")
-    path = path.strip("/").replace("/", "_").replace(" ", "_") or "home"
-    # Clean
-    keep = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
-    path = "".join(c if c in keep else "_" for c in path)
-    path = path[:60]
-    return f"{path}_{h}.md"
+    p = url.replace("https://www.5qln.com/", "").replace("https://5qln.com/", "").strip("/")
+    p = "".join(c if c.isalnum() or c in "-_" else "_" for c in p)[:60]
+    return f"{p or 'home'}_{h}.md"
 
 def run():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--limit', type=int, default=50)
+    parser.add_argument("--limit", type=int, default=50)
     args = parser.parse_args()
 
-    WIKI_RAW_DOCS.mkdir(parents=True, exist_ok=True)
-
+    RAW.mkdir(parents=True, exist_ok=True)
     processed = load_processed()
-    con = duckdb.connect(DB, read_only=True)
 
+    con = duckdb.connect(DB, read_only=True)
     rows = con.execute("""
         SELECT url, title, content, tags
         FROM pages
         WHERE content IS NOT NULL
-        AND length(content) > 200
+          AND length(content) > 200
+          AND url NOT LIKE '%/tag/%'
+          AND url NOT LIKE '%/category/%'
+          AND url NOT LIKE '%/author/%'
+          AND url NOT LIKE '%ghost%'
         ORDER BY depth ASC, url ASC
         LIMIT ?
     """, [args.limit]).fetchall()
     con.close()
 
-    new_raw = []
-    updated_urls = set(processed)
+    new_urls = []
+    updated = set(processed)
 
     for url, title, content, tags in rows:
-        if url in processed:
+        if url in updated:
             continue
-        # Skip tag/category pages (usually thin)
-        if "/tag/" in url or "/category/" in url or "/author/" in url:
-            updated_urls.add(url)
-            continue
+        s = slug(url)
+        (RAW / s).write_text(
+            f"---\ntitle: \"{title.replace(chr(34), chr(92)+chr(34))}\"\nsource: {url}\ntags: [{tags or 'untagged'}]\nphase: unknown\nconfidence: low\n---\n\n# {title}\n\n" + (content or "")[:80000],
+            encoding="utf-8"
+        )
+        new_urls.append((url, title, s))
+        updated.add(url)
 
-        slug = url_to_slug(url)
-        out_path = WIKI_RAW_DOCS / slug
+    save_processed(updated)
+    print(f"Extracted {len(new_urls)} new raw docs:")
+    for u, t, s in new_urls[:10]:
+        print(f"  {s}")
+    if len(new_urls) > 10:
+        print(f"  ... +{len(new_urls)-10} more")
+    print(f"\nTotal processed: {len(updated)}")
 
-        frontmatter = f"""---
-title: "{title.replace('"', '\\"')}"
-source: {url}
-tags: [{tags}]
-phase: unknown
-confidence: low
----
-
-# {title}
-
-"""
-        # Prepend frontmatter, use first 80k chars of content
-        body = content[:80000] if content else ""
-        out_path.write_text(frontmatter + body, encoding='utf-8')
-        new_raw.append((url, title, slug))
-        updated_urls.add(url)
-
-    save_processed(updated_urls)
-
-    print(f"Extracted {len(new_raw)} new raw documents:")
-    for url, title, slug in new_raw[:10]:
-        print(f"  {slug}")
-        print(f"    {url}")
-    if len(new_raw) > 10:
-        print(f"  ... and {len(new_raw) - 10} more")
-
-    print(f"\nTotal processed: {len(updated_urls)}")
-    print(f"Raw docs in: {WIKI_RAW_DOCS}")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()

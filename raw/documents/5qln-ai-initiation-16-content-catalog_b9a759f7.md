@@ -1,7 +1,7 @@
 ---
 title: "5QLN Content Catalog — Complete Index of 5qln.com"
 source: https://www.5qln.com/5qln-ai-initiation-16-content-catalog/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

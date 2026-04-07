@@ -1,7 +1,7 @@
 ---
 title: "The 5QLN Open-Source License"
 source: https://www.5qln.com/5qln-open-source-license/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

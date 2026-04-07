@@ -1,7 +1,7 @@
 ---
 title: "5QLN Book: A Session's Living Artifact"
 source: https://www.5qln.com/5qln-language-by-amihai-loven/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

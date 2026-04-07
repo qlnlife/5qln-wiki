@@ -1,7 +1,7 @@
 ---
 title: "POWER | The 5QLN Path of Effortless Action"
 source: https://www.5qln.com/Power/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

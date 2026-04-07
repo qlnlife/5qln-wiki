@@ -1,7 +1,7 @@
 ---
 title: "QUALITY | Sensing Authentic Alignment with 5QLN"
 source: https://www.5qln.com/Quality/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

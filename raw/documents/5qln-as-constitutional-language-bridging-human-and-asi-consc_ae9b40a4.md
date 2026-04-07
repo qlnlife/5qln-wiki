@@ -1,7 +1,7 @@
 ---
 title: "5QLN: Bridging Human-ASI Consciousness"
 source: https://www.5qln.com/5qln-as-constitutional-language-bridging-human-and-asi-consciousness-through-symbolic-evolution/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

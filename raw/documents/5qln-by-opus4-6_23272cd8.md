@@ -1,7 +1,7 @@
 ---
 title: "5QLN by Opus4.6: The Grounded Encoding"
 source: https://www.5qln.com/5qln-by-opus4-6/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

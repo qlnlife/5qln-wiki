@@ -1,7 +1,7 @@
 ---
 title: "5QLN CONSTITUTIONAL EVOLUTION: A LIVING NOTATION FRAMEWORK"
 source: https://www.5qln.com/5qln-constitutional-evolution-a-living-notation-framework/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

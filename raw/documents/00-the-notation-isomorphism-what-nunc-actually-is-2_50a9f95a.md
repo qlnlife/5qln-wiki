@@ -1,7 +1,7 @@
 ---
 title: "00-The Notation Isomorphism: What Nunc protocol Actually Is"
 source: https://www.5qln.com/00-the-notation-isomorphism-what-nunc-actually-is-2/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

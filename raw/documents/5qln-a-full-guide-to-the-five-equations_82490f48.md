@@ -1,7 +1,7 @@
 ---
 title: "5QLN: A Full Guide to the Five Equations"
 source: https://www.5qln.com/5qln-a-full-guide-to-the-five-equations/
-tags: []
+tags: [untagged]
 phase: unknown
 confidence: low
 ---

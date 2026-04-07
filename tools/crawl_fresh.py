@@ -66,7 +66,7 @@ def run():
 
     print(f"Crawl complete. New pages: {len(new_pages)}")
 
-    # Update DuckDB
+    # Update DuckDB — upsert by url
     import duckdb
     con = duckdb.connect(DB)
 
@@ -77,10 +77,15 @@ def run():
         content = page.get('content', '')[:100000]
         tags = ','.join(page.get('tags', []) or [])[:500]
         try:
-            con.execute(
-                "INSERT OR REPLACE INTO pages (url, title, depth, content, tags) VALUES (?, ?, ?, ?, ?)",
-                [url, title, depth, content, tags]
-            )
+            con.execute("""
+                INSERT INTO pages (url, title, depth, content, tags)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (url) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    depth = EXCLUDED.depth,
+                    content = EXCLUDED.content,
+                    tags = EXCLUDED.tags
+            """, [url, title, depth, content, tags])
         except Exception as e:
             print(f"DB insert error for {url}: {e}")
 
