@@ -1,0 +1,135 @@
+{
+  "name": "5qln-wiki",
+  "id": "5qln-wiki-2026-04-07",
+  "version": "1.0.0",
+  "description": "Synthesized 5QLN knowledge base from 5qln.com crawl. Full content, FAQ, alpha index, phase index, DuckDB queryable.",
+  "keywords": [
+    "5qln",
+    "constitutional-grammar",
+    "human-ai-collaboration",
+    "five-phases",
+    "fractal-seed"
+  ],
+  "created": "2026-04-07",
+  "license": "CC BY-NC-SA 4.0",
+  "resources": [
+    {
+      "path": "5qln_wiki.duckdb",
+      "name": "5qln_wiki",
+      "type": "table",
+      "description": "Full 5qln.com crawl — 129 articles, DuckDB queryable",
+      "schema": {
+        "fields": [
+          {
+            "name": "url",
+            "type": "string",
+            "description": "Source URL"
+          },
+          {
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "name": "depth",
+            "type": "integer"
+          },
+          {
+            "name": "content",
+            "type": "string",
+            "description": "Full article markdown"
+          },
+          {
+            "name": "type",
+            "type": "string"
+          },
+          {
+            "name": "phase",
+            "type": "string",
+            "constraints": {
+              "enum": [
+                "S",
+                "G",
+                "Q",
+                "P",
+                "V",
+                "meta"
+              ]
+            }
+          },
+          {
+            "name": "alpha",
+            "type": "string",
+            "description": "Core 5QLN symbol mapping"
+          },
+          {
+            "name": "tags",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "type": "string",
+            "description": "Article text (content minus metadata)"
+          },
+          {
+            "name": "q",
+            "type": "string",
+            "description": "Derived question"
+          },
+          {
+            "name": "a",
+            "type": "string",
+            "description": "Short answer excerpt"
+          },
+          {
+            "name": "chars",
+            "type": "integer"
+          }
+        ]
+      }
+    },
+    {
+      "path": "faq_essence.json",
+      "name": "faq_essence",
+      "type": "file",
+      "description": "129 Q&A entries extracted from all 5QLN phases. De-duplicated, cleaned, phase-ordered."
+    },
+    {
+      "path": "phase_index.json",
+      "name": "phase_index",
+      "type": "file",
+      "description": "Articles organized by 5QLN phase (S/G/Q/P/V) with source URLs and tags"
+    },
+    {
+      "path": "alpha_index.json",
+      "name": "alpha_index",
+      "type": "file",
+      "description": "5QLN symbol (alpha) → definition mapping"
+    },
+    {
+      "path": "tag_cloud.json",
+      "name": "tag_cloud",
+      "type": "file",
+      "description": "Tag frequency across all articles"
+    },
+    {
+      "path": "link_graph.json",
+      "name": "link_graph",
+      "type": "file",
+      "description": "Wikilink adjacency graph across concept pages"
+    }
+  ],
+  "stats": {
+    "total_articles": 129,
+    "faq_entries": 129,
+    "concepts_by_phase": {
+      "S": 16,
+      "G": 103,
+      "Q": 7,
+      "P": 3,
+      "V": 7,
+      "meta": 13
+    },
+    "total_words_approx": 72477
+  },
+  "pipeline": "5qln-wiki tools: crawl_fresh → DuckDB → extract_new_pages → wiki_scraper_agent(S→G→Q→P→V) → validate_wiki → DuckDB export"
+}
