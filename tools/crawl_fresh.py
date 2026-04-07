@@ -43,8 +43,7 @@ def run():
         "python3", SCRAPER, "crawl", BASE_URL,
         "--depth", str(args.depth),
         "--max-pages", str(args.max_pages),
-        "--output", out_path,
-        "--format", "json"
+        "--output", str(out_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
     if result.returncode != 0:
