@@ -4,8 +4,8 @@ type: source
 phase: unknown
 tags: [[untagged]]
 sources: raw/documents/5qln-a-fractal-language-for-native-human-ai-collaboration_18d81e9c.md
-created: 2026-04-07
-updated: 2026-04-07
+created: 2026-04-08
+updated: 2026-04-08
 confidence: medium
 ---
 

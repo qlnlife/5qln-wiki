@@ -4,8 +4,8 @@ type: source
 phase: unknown
 tags: [[untagged]]
 sources: raw/documents/5qln-a-full-guide-to-the-five-equations_82490f48.md
-created: 2026-04-07
-updated: 2026-04-07
+created: 2026-04-08
+updated: 2026-04-08
 confidence: medium
 ---
 

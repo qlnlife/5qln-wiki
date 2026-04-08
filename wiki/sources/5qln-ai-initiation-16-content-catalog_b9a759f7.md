@@ -4,8 +4,8 @@ type: source
 phase: unknown
 tags: [[untagged]]
 sources: raw/documents/5qln-ai-initiation-16-content-catalog_b9a759f7.md
-created: 2026-04-07
-updated: 2026-04-07
+created: 2026-04-08
+updated: 2026-04-08
 confidence: medium
 ---
 

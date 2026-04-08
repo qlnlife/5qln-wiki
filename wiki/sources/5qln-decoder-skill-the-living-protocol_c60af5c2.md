@@ -4,8 +4,8 @@ type: source
 phase: unknown
 tags: [[untagged]]
 sources: raw/documents/5qln-decoder-skill-the-living-protocol_c60af5c2.md
-created: 2026-04-07
-updated: 2026-04-07
+created: 2026-04-08
+updated: 2026-04-08
 confidence: medium
 ---
 

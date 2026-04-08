@@ -4,8 +4,8 @@ type: source
 phase: unknown
 tags: [[untagged]]
 sources: raw/documents/00-the-notation-isomorphism-what-nunc-actually-is-2_50a9f95a.md
-created: 2026-04-07
-updated: 2026-04-07
+created: 2026-04-08
+updated: 2026-04-08
 confidence: medium
 ---
 
